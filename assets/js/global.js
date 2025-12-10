@@ -1052,6 +1052,616 @@ function renderDemo(host, data) {
   });
 }
 
+function renderFinanceDemo(host) {
+  const categories = ['Essenciais', 'Lazer', 'Saúde', 'Investimentos'];
+  const state = {
+    items: [
+      { type: 'Entrada', description: 'Pagamento projeto', value: 1800, category: 'Investimentos' },
+      { type: 'Saída', description: 'Aluguel', value: 1200, category: 'Essenciais' },
+      { type: 'Saída', description: 'Mercado', value: 320, category: 'Essenciais' },
+      { type: 'Entrada', description: 'Freelance UX', value: 650, category: 'Investimentos' },
+    ],
+    filter: 'Todos',
+  };
+
+  host.innerHTML = `
+    <div class="demo-header">
+      <div>
+        <p class="kicker" style="margin:0;">Dashboard em ação</p>
+        <h3 style="margin:0;">Fluxo financeiro em tempo real</h3>
+        <p style="color: var(--muted); margin:0;">Adicione entradas e saídas, veja o saldo e acompanhe o ritmo da semana.</p>
+      </div>
+      <div class="demo-pill-row">
+        ${['Todos', ...categories]
+          .map((cat) => `<button class="pill-btn" data-filter="${cat}">${cat}</button>`)
+          .join('')}
+      </div>
+    </div>
+    <div class="finance-grid">
+      <div class="finance-summary">
+        <div class="summary-card">
+          <p class="kicker" style="margin:0;">Entradas</p>
+          <strong data-fin-income></strong>
+          <small data-fin-income-count></small>
+        </div>
+        <div class="summary-card">
+          <p class="kicker" style="margin:0;">Saídas</p>
+          <strong data-fin-expense></strong>
+          <small data-fin-expense-count></small>
+        </div>
+        <div class="summary-card highlight">
+          <p class="kicker" style="margin:0;">Saldo</p>
+          <strong data-fin-balance></strong>
+          <small>projeção semanal automática</small>
+        </div>
+      </div>
+      <div class="finance-body">
+        <div class="finance-form">
+          <div class="form-row">
+            <select data-fin-type>
+              <option>Entrada</option>
+              <option>Saída</option>
+            </select>
+            <input type="text" placeholder="Descrição" data-fin-desc>
+            <input type="number" min="1" step="0.01" placeholder="Valor" data-fin-value>
+          </div>
+          <div class="form-row">
+            <select data-fin-cat>
+              ${categories.map((cat) => `<option>${cat}</option>`).join('')}
+            </select>
+            <button class="btn" type="button" data-fin-add>Registrar</button>
+          </div>
+        </div>
+        <div class="finance-chart" data-fin-chart>
+          <div class="chart-bars" data-fin-bars></div>
+          <div class="chart-legend">
+            <span class="demo-chip">Ritmo diário</span>
+            <span class="demo-chip" style="background: rgba(34, 211, 238, 0.12); color: #67e8f9;">Meta</span>
+          </div>
+        </div>
+      </div>
+      <div class="finance-table" data-fin-list></div>
+    </div>
+  `;
+
+  const refs = {
+    income: host.querySelector('[data-fin-income]'),
+    incomeCount: host.querySelector('[data-fin-income-count]'),
+    expense: host.querySelector('[data-fin-expense]'),
+    expenseCount: host.querySelector('[data-fin-expense-count]'),
+    balance: host.querySelector('[data-fin-balance]'),
+    list: host.querySelector('[data-fin-list]'),
+    type: host.querySelector('[data-fin-type]'),
+    desc: host.querySelector('[data-fin-desc]'),
+    value: host.querySelector('[data-fin-value]'),
+    cat: host.querySelector('[data-fin-cat]'),
+    add: host.querySelector('[data-fin-add]'),
+    bars: host.querySelector('[data-fin-bars]'),
+  };
+
+  const renderSummary = () => {
+    const incomeItems = state.items.filter((i) => i.type === 'Entrada');
+    const expenseItems = state.items.filter((i) => i.type === 'Saída');
+    const sum = (arr) => arr.reduce((total, item) => total + item.value, 0);
+    const totalIncome = sum(incomeItems);
+    const totalExpense = sum(expenseItems);
+    const balance = totalIncome - totalExpense;
+    refs.income.textContent = totalIncome.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    refs.expense.textContent = totalExpense.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    refs.balance.textContent = balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    refs.incomeCount.textContent = `${incomeItems.length} recebimentos`;
+    refs.expenseCount.textContent = `${expenseItems.length} despesas`;
+  };
+
+  const renderList = () => {
+    const rows = state.items
+      .filter((item) => state.filter === 'Todos' || item.category === state.filter)
+      .map(
+        (item) => `
+        <div class="finance-row" data-tone="${item.type === 'Entrada' ? 'positive' : 'negative'}">
+          <div>
+            <strong>${item.description}</strong>
+            <p style="margin:0; color: var(--muted);">${item.category}</p>
+          </div>
+          <div class="row-right">
+            <span class="badge">${item.type}</span>
+            <span class="value">${(item.type === 'Entrada' ? 1 : -1) * item.value >= 0 ? '+' : ''}${
+            (item.type === 'Entrada' ? item.value : -item.value).toLocaleString('pt-BR', {
+              style: 'currency',
+              currency: 'BRL',
+            })
+          }</span>
+          </div>
+        </div>
+      `
+      )
+      .join('');
+    refs.list.innerHTML = rows || '<p class="demo-empty">Nada aqui ainda.</p>';
+  };
+
+  const renderBars = () => {
+    const totals = Array.from({ length: 7 }, (_, i) => ({ label: `D${i + 1}`, value: Math.max(80, 160 - i * 12) }));
+    const max = Math.max(...totals.map((t) => t.value));
+    refs.bars.innerHTML = totals
+      .map(
+        (day, idx) => `
+        <div class="bar">
+          <div class="bar-fill" style="height:${(day.value / max) * 100}%">
+            <span>${day.value}</span>
+          </div>
+          <small>D${idx + 1}</small>
+        </div>
+      `
+      )
+      .join('');
+  };
+
+  refs.add.addEventListener('click', () => {
+    const desc = refs.desc.value.trim();
+    const value = parseFloat(refs.value.value);
+    if (!desc || !Number.isFinite(value) || value <= 0) return;
+    state.items.unshift({ type: refs.type.value, description: desc, value, category: refs.cat.value });
+    refs.desc.value = '';
+    refs.value.value = '';
+    renderSummary();
+    renderList();
+  });
+
+  host.querySelectorAll('[data-filter]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.filter = btn.dataset.filter;
+      host.querySelectorAll('[data-filter]').forEach((b) => b.classList.remove('pill-btn-active'));
+      btn.classList.add('pill-btn-active');
+      renderList();
+    });
+  });
+
+  renderSummary();
+  renderList();
+  renderBars();
+}
+
+function renderBrandDemo(host) {
+  const palettes = {
+    Vibrante: ['#8B5CF6', '#22D3EE', '#0F172A', '#FACC15'],
+    Minimal: ['#0F172A', '#E2E8F0', '#7C3AED', '#94A3B8'],
+    Neutro: ['#111827', '#22D3EE', '#6EE7B7', '#9CA3AF'],
+  };
+
+  const randomize = (base) =>
+    base.map((color) => {
+      const delta = () => Math.max(Math.min(Math.floor(Math.random() * 30) - 15, 15), -15);
+      const toHex = (num) => num.toString(16).padStart(2, '0');
+      const [r, g, b] = color
+        .match(/#(..)(..)(..)/)
+        .slice(1)
+        .map((pair) => parseInt(pair, 16))
+        .map((val) => Math.min(255, Math.max(0, val + delta())));
+      return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    });
+
+  host.innerHTML = `
+    <div class="demo-header">
+      <div>
+        <p class="kicker" style="margin:0;">Brand kit generator</p>
+        <h3 style="margin:0;">Gere logo e paleta na hora</h3>
+        <p style="color: var(--muted); margin:0;">Mude o estilo e veja logo, cartão e UI adaptarem em tempo real.</p>
+      </div>
+      <div class="brand-form">
+        <input type="text" placeholder="Nome da marca" value="Nordico" data-brand-name>
+        <select data-brand-style>
+          <option>Vibrante</option>
+          <option>Minimal</option>
+          <option>Neutro</option>
+        </select>
+        <button class="btn" type="button" data-brand-generate>Gerar kit</button>
+      </div>
+    </div>
+    <div class="brand-grid">
+      <div class="brand-logo" data-brand-logo>
+        <div class="brand-mark" data-brand-mark>NC</div>
+        <div>
+          <strong data-brand-title>Nordico</strong>
+          <p style="margin:0; color: var(--muted);">Brand kit instantâneo</p>
+        </div>
+      </div>
+      <div class="brand-swatches" data-brand-swatches></div>
+      <div class="brand-card" data-brand-card>
+        <div class="card-top">
+          <div class="mini-badge">UI preview</div>
+          <span data-brand-chip>Nova coleção</span>
+        </div>
+        <h4 data-brand-heading>Landing premium</h4>
+        <p style="color: var(--muted);">Botões, fundos e badges seguindo a paleta gerada.</p>
+        <div class="card-actions">
+          <button class="btn">Comprar</button>
+          <button class="btn secondary">Ver detalhes</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const refs = {
+    name: host.querySelector('[data-brand-name]'),
+    style: host.querySelector('[data-brand-style]'),
+    generate: host.querySelector('[data-brand-generate]'),
+    logo: host.querySelector('[data-brand-logo]'),
+    mark: host.querySelector('[data-brand-mark]'),
+    title: host.querySelector('[data-brand-title]'),
+    swatches: host.querySelector('[data-brand-swatches]'),
+    chip: host.querySelector('[data-brand-chip]'),
+    heading: host.querySelector('[data-brand-heading]'),
+    card: host.querySelector('[data-brand-card]'),
+  };
+
+  const apply = () => {
+    const brand = refs.name.value || 'Sua marca';
+    const base = palettes[refs.style.value];
+    const colors = randomize(base);
+    const initials = brand
+      .split(' ')
+      .map((p) => p[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+
+    refs.mark.textContent = initials || 'BK';
+    refs.title.textContent = brand;
+    refs.logo.style.background = `linear-gradient(135deg, ${colors[0]}, ${colors[1]})`;
+    refs.mark.style.color = colors[2];
+    refs.mark.style.borderColor = colors[3];
+    refs.swatches.innerHTML = colors
+      .map((color) => `<div class="swatch" style="background:${color};"><span>${color}</span></div>`)
+      .join('');
+    refs.card.style.background = `linear-gradient(135deg, ${colors[0]} 0%, ${colors[1]} 100%)`;
+    refs.chip.style.background = colors[2];
+    refs.heading.textContent = `${brand} — ${refs.style.value}`;
+  };
+
+  refs.generate.addEventListener('click', apply);
+  apply();
+}
+
+function renderRestaurantDemo(host) {
+  const menus = {
+    Degustação: [
+      { name: 'Robalo grelhado', price: 78, badge: 'Best seller' },
+      { name: 'Risoto de limão siciliano', price: 62, badge: 'Chef' },
+    ],
+    Vegano: [
+      { name: 'Gnocchi de batata doce', price: 54, badge: 'Light' },
+      { name: 'Tartar de beterraba', price: 48, badge: 'Entrada' },
+    ],
+    Brunch: [
+      { name: 'Ovos beneditinos', price: 44, badge: 'Clássico' },
+      { name: 'Granola com iogurte', price: 32, badge: 'Fresh' },
+    ],
+  };
+
+  host.innerHTML = `
+    <div class="demo-header">
+      <div>
+        <p class="kicker" style="margin:0;">Restaurante premium</p>
+        <h3 style="margin:0;">Menu e reservas lado a lado</h3>
+        <p style="color: var(--muted); margin:0;">Escolha o menu, ajuste pessoas e confirme a reserva imediatamente.</p>
+      </div>
+      <div class="restaurant-cta">
+        <label>Data <input type="date" data-res-date></label>
+        <label>Pessoas <input type="number" min="1" value="2" data-res-people></label>
+        <button class="btn" type="button" data-res-confirm>Confirmar</button>
+      </div>
+    </div>
+    <div class="restaurant-grid">
+      <div class="menu-tabs" data-menu-tabs>
+        ${Object.keys(menus)
+          .map((tab) => `<button class="pill-btn" data-menu="${tab}">${tab}</button>`)
+          .join('')}
+      </div>
+      <div class="menu-list" data-menu-list></div>
+      <div class="reservation-card" data-resume>
+        <p class="kicker" style="margin:0;">Reserva</p>
+        <h4 data-resume-title>Degustação • 2 pessoas</h4>
+        <p style="margin:0; color: var(--muted);">Horário premium com confirmação instantânea.</p>
+        <div class="resume-prices" data-resume-items></div>
+        <div class="resume-total">
+          <span>Total estimado</span>
+          <strong data-resume-total></strong>
+        </div>
+        <div class="resume-status" data-res-status>Selecione um menu e confirme.</div>
+      </div>
+    </div>
+  `;
+
+  const state = { tab: 'Degustação' };
+  const refs = {
+    tabs: host.querySelectorAll('[data-menu]'),
+    list: host.querySelector('[data-menu-list]'),
+    resumeTitle: host.querySelector('[data-resume-title]'),
+    resumeItems: host.querySelector('[data-resume-items]'),
+    resumeTotal: host.querySelector('[data-resume-total]'),
+    status: host.querySelector('[data-res-status]'),
+    date: host.querySelector('[data-res-date]'),
+    people: host.querySelector('[data-res-people]'),
+    confirm: host.querySelector('[data-res-confirm]'),
+  };
+
+  const renderList = () => {
+    refs.list.innerHTML = menus[state.tab]
+      .map(
+        (item) => `
+          <div class="menu-item">
+            <div>
+              <strong>${item.name}</strong>
+              <p style="margin:0; color: var(--muted);">Inclui harmonização</p>
+            </div>
+            <div class="menu-meta">
+              <span class="badge">${item.badge}</span>
+              <strong>R$ ${item.price}</strong>
+            </div>
+          </div>
+        `
+      )
+      .join('');
+  };
+
+  const renderResume = () => {
+    const items = menus[state.tab];
+    const total = items.reduce((sum, item) => sum + item.price, 0) * Number(refs.people.value || 1);
+    refs.resumeTitle.textContent = `${state.tab} • ${refs.people.value || 1} pessoa(s)`;
+    refs.resumeItems.innerHTML = items
+      .map((item) => `<div class="resume-row"><span>${item.name}</span><span>R$ ${item.price}</span></div>`)
+      .join('');
+    refs.resumeTotal.textContent = total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  };
+
+  refs.tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      state.tab = tab.dataset.menu;
+      refs.tabs.forEach((t) => t.classList.remove('pill-btn-active'));
+      tab.classList.add('pill-btn-active');
+      renderList();
+      renderResume();
+    });
+  });
+
+  refs.people.addEventListener('input', renderResume);
+  refs.confirm.addEventListener('click', () => {
+    const date = refs.date.value ? new Date(refs.date.value).toLocaleDateString('pt-BR') : 'hoje';
+    refs.status.textContent = `Mesa confirmada para ${refs.people.value || 1} • ${state.tab} em ${date}`;
+  });
+
+  refs.tabs[0].classList.add('pill-btn-active');
+  renderList();
+  renderResume();
+}
+
+function renderWorkoutDemo(host) {
+  const exercises = [
+    { name: 'Flexões', sets: 4, reps: 12, group: 'Peito' },
+    { name: 'Agachamento', sets: 4, reps: 10, group: 'Pernas' },
+    { name: 'Prancha', sets: 3, reps: 45, group: 'Core' },
+  ];
+  const state = { done: new Set(), streak: 8 };
+
+  host.innerHTML = `
+    <div class="demo-header">
+      <div>
+        <p class="kicker" style="margin:0;">Workout planner</p>
+        <h3 style="margin:0;">Sessão guiada com progresso</h3>
+        <p style="color: var(--muted); margin:0;">Marque séries concluídas, acompanhe streak e exporte mini-resumo.</p>
+      </div>
+      <div class="workout-badges">
+        <span class="demo-chip">Streak <strong data-wk-streak>8</strong> dias</span>
+        <span class="demo-chip" data-wk-progress>0% concluído</span>
+      </div>
+    </div>
+    <div class="workout-grid">
+      <div class="workout-list" data-wk-list></div>
+      <div class="workout-panel">
+        <h4>Bloco rápido</h4>
+        <p style="color: var(--muted);">Use o temporizador de 45s entre séries.</p>
+        <div class="timer" data-wk-timer>00:45</div>
+        <div class="timer-actions">
+          <button class="btn" type="button" data-wk-start>Iniciar</button>
+          <button class="btn secondary" type="button" data-wk-reset>Reset</button>
+        </div>
+        <div class="export" data-wk-export>Exportar resumo</div>
+      </div>
+    </div>
+  `;
+
+  const refs = {
+    list: host.querySelector('[data-wk-list]'),
+    streak: host.querySelector('[data-wk-streak]'),
+    progress: host.querySelector('[data-wk-progress]'),
+    timer: host.querySelector('[data-wk-timer]'),
+    start: host.querySelector('[data-wk-start]'),
+    reset: host.querySelector('[data-wk-reset]'),
+    export: host.querySelector('[data-wk-export]'),
+  };
+
+  const updateProgress = () => {
+    const pct = Math.round((state.done.size / exercises.length) * 100);
+    refs.progress.textContent = `${pct}% concluído`;
+  };
+
+  const renderList = () => {
+    refs.list.innerHTML = exercises
+      .map(
+        (ex, idx) => `
+        <label class="workout-item">
+          <input type="checkbox" data-wk-check="${idx}" ${state.done.has(idx) ? 'checked' : ''}>
+          <div>
+            <strong>${ex.name}</strong>
+            <p style="margin:0; color: var(--muted);">${ex.sets}x${ex.reps} • ${ex.group}</p>
+          </div>
+        </label>
+      `
+      )
+      .join('');
+
+    refs.list.querySelectorAll('[data-wk-check]').forEach((input) => {
+      input.addEventListener('change', () => {
+        const id = Number(input.dataset.wkCheck);
+        if (input.checked) state.done.add(id);
+        else state.done.delete(id);
+        updateProgress();
+      });
+    });
+  };
+
+  let timerId;
+  const startTimer = () => {
+    let seconds = 45;
+    clearInterval(timerId);
+    refs.timer.textContent = '00:45';
+    timerId = setInterval(() => {
+      seconds -= 1;
+      if (seconds <= 0) {
+        clearInterval(timerId);
+        refs.timer.textContent = 'Pronto!';
+        state.streak += 1;
+        refs.streak.textContent = state.streak;
+        return;
+      }
+      const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
+      const ss = String(seconds % 60).padStart(2, '0');
+      refs.timer.textContent = `${mm}:${ss}`;
+    }, 1000);
+  };
+
+  refs.start.addEventListener('click', startTimer);
+  refs.reset.addEventListener('click', () => {
+    clearInterval(timerId);
+    refs.timer.textContent = '00:45';
+    state.streak = 8;
+    refs.streak.textContent = state.streak;
+    state.done.clear();
+    renderList();
+    updateProgress();
+  });
+
+  refs.export.addEventListener('click', () => {
+    const checked = exercises.filter((_, idx) => state.done.has(idx)).map((ex) => ex.name);
+    refs.export.textContent = checked.length ? `Exportado: ${checked.join(', ')}` : 'Nada para exportar';
+  });
+
+  renderList();
+  updateProgress();
+}
+
+function renderStoreDemo(host) {
+  const products = [
+    { name: 'Headphone Neo', price: 180, tag: 'Audio', category: 'Eletrônicos' },
+    { name: 'Smartwatch Fit', price: 220, tag: 'Wearable', category: 'Eletrônicos' },
+    { name: 'Mochila Tech', price: 140, tag: 'Lifestyle', category: 'Acessórios' },
+    { name: 'Camiseta Minimal', price: 89, tag: 'Moda', category: 'Vestuário' },
+  ];
+  const state = { filter: 'Todos', cart: [] };
+
+  host.innerHTML = `
+    <div class="demo-header">
+      <div>
+        <p class="kicker" style="margin:0;">Loja estática</p>
+        <h3 style="margin:0;">Catálogo interativo</h3>
+        <p style="color: var(--muted); margin:0;">Filtre produtos, adicione ao carrinho e veja o ticket médio em tempo real.</p>
+      </div>
+      <div class="store-filters">
+        ${['Todos', 'Eletrônicos', 'Acessórios', 'Vestuário']
+          .map((cat) => `<button class="pill-btn" data-store-filter="${cat}">${cat}</button>`)
+          .join('')}
+      </div>
+    </div>
+    <div class="store-grid">
+      <div class="product-list" data-store-list></div>
+      <div class="cart-card">
+        <div class="cart-head">
+          <p class="kicker" style="margin:0;">Carrinho</p>
+          <strong data-cart-count>0 itens</strong>
+        </div>
+        <div class="cart-body" data-cart-body></div>
+        <div class="cart-foot">
+          <span>Total</span>
+          <strong data-cart-total>R$ 0,00</strong>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const refs = {
+    buttons: host.querySelectorAll('[data-store-filter]'),
+    list: host.querySelector('[data-store-list]'),
+    cartBody: host.querySelector('[data-cart-body]'),
+    cartTotal: host.querySelector('[data-cart-total]'),
+    cartCount: host.querySelector('[data-cart-count]'),
+  };
+
+  const renderProducts = () => {
+    refs.list.innerHTML = products
+      .filter((p) => state.filter === 'Todos' || p.category === state.filter)
+      .map(
+        (p) => `
+        <div class="product-card">
+          <div>
+            <div class="mini-badge">${p.tag}</div>
+            <strong>${p.name}</strong>
+            <p style="margin:0; color: var(--muted);">${p.category}</p>
+          </div>
+          <div class="product-meta">
+            <strong>R$ ${p.price}</strong>
+            <button class="btn secondary" data-add="${p.name}">Adicionar</button>
+          </div>
+        </div>
+      `
+      )
+      .join('');
+
+    refs.list.querySelectorAll('[data-add]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const product = products.find((p) => p.name === btn.dataset.add);
+        if (product) state.cart.push(product);
+        renderCart();
+      });
+    });
+  };
+
+  const renderCart = () => {
+    if (!state.cart.length) {
+      refs.cartBody.innerHTML = '<p class="demo-empty">Carrinho vazio</p>';
+      refs.cartTotal.textContent = 'R$ 0,00';
+      refs.cartCount.textContent = '0 itens';
+      return;
+    }
+    refs.cartBody.innerHTML = state.cart
+      .map((item) => `<div class="cart-row"><span>${item.name}</span><strong>R$ ${item.price}</strong></div>`)
+      .join('');
+    const total = state.cart.reduce((sum, item) => sum + item.price, 0);
+    refs.cartTotal.textContent = total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    refs.cartCount.textContent = `${state.cart.length} item(s)`;
+  };
+
+  refs.buttons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.filter = btn.dataset.storeFilter;
+      refs.buttons.forEach((b) => b.classList.remove('pill-btn-active'));
+      btn.classList.add('pill-btn-active');
+      renderProducts();
+    });
+  });
+
+  refs.buttons[0].classList.add('pill-btn-active');
+  renderProducts();
+  renderCart();
+}
+
+const customRenderers = {
+  projeto01: renderFinanceDemo,
+  projeto02: renderBrandDemo,
+  projeto03: renderRestaurantDemo,
+  projeto04: renderWorkoutDemo,
+  projeto05: renderStoreDemo,
+};
+
 (function () {
   const path = window.location.pathname.replace(/\/$/, '');
   const links = document.querySelectorAll('.nav-links a');
@@ -1084,7 +1694,10 @@ function renderDemo(host, data) {
   const projectKey = document.body?.dataset.project;
   if (demoHost && projectKey) {
     const data = demoData[projectKey];
-    if (data) {
+    const custom = customRenderers[projectKey];
+    if (custom) {
+      custom(demoHost);
+    } else if (data) {
       renderDemo(demoHost, data);
     } else {
       demoHost.innerHTML = '<p class="demo-empty">Demonstração em breve.</p>';
