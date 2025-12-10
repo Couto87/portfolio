@@ -736,6 +736,8 @@ function initProjectPage() {
   document.querySelector('.project-summary').textContent = project.summary;
   document.querySelector('.project-description').textContent = project.description;
   document.querySelector('.project-demo').textContent = project.demo;
+  document.querySelector('.project-impact').textContent = project.impact || '';
+  document.querySelector('.project-usage').textContent = project.usage || '';
 
   buildList(project.highlights, document.querySelector('.project-highlights'));
   buildList(project.technologies, document.querySelector('.project-tech'));
